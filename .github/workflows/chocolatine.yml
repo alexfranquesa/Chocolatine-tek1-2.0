@@ -1,56 +1,64 @@
-name: Chocolatine Workflow
-
+name: Chocolatine
 on:
   push:
     branches-ignore:
-      -'ga-ignore-*'
-    paths-ignore:
-      -'.github/workflows*chocolatine.yml'
+      - 'ga-ignore-*'
   pull_request:
     branches-ignore:
-      -'ga-ignore-*'
-    paths-ignore:
-      -'.github/workflows*chocolatine.yml'
-
+      - 'ga-ignore-*'
 env:
-  MIRROR_URL: ${{ secrets.MIRROR_URL }}
-  EXECUTABLES: ${{ secrets.EXECUTABLES }}
-
+  EXECUTABLES: "push_swap"
 jobs:
   check_coding_style:
-    name: Check Coding Style
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/epitech/coding-style-checker:latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v2
-
       - name: Check Coding Style
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            ghcr.io/epitech/coding-style-checker:latest \
+            rm -rf coding_style_errors.txt
             check.sh $(pwd) $(pwd)
+            exit_code=$?
+            echo $exit_code
+            if [ $exit_code -ne 0 ];then
+            coding_style_output=$(cat coding_style_errors.txt)
+            echo "::error file=app.js,line=1,col=1::${coding_style_output}"
+            exit $exit_code
+            fi
 
-check_program_compilation:
-    name: Check Program Compilation
-    runs-on: epitechcontent/epitest-docker
+  check_program_compilation:
+    runs-on: ubuntu-latest
+    needs: check_coding_style
+    if: success()
     timeout-minutes: 2
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v2
-
-      - name: Launch Make
+      - name: Make
         run: make
-
-      - name: Clean Up
+      - name: Clean
         run: make clean
-
-      - name: Verify Executables
+      - name: Execute
         run: |
-          IFS=',' read -ra EXECUTABLES <<< "$EXECUTABLES"
-          for executable in "${EXECUTABLES[@]}"; do
-            if [ ! -x "$executable" ]; then
-              echo "Executable $executable does not exist or is not executable"
-              exit 1
-            fi
+          for executable in $EXECUTABLES; do
+          if [ ! -x "./$executable" ]; then
+          echo "Error: $executable does not exist or is not executable"
+          exit 1
+          fi
           done
+
+  run_tests:
+    runs-on: ubuntu-latest
+    needs: check_program_compilation
+    if: success()
+    timeout-minutes: 2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run Tests
+        uses: docker://epitechcontent/epitest-docker:latest
+        with:
+          entrypoint: "/bin/bash"
+          args: "-c 'make tests_run'"
