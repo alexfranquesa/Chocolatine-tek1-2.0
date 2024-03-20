@@ -1,0 +1,56 @@
+name: Chocolatine Workflow
+
+on:
+  push:
+    branches-ignore:
+      -'ga-ignore-*'
+    paths-ignore:
+      -'.github/workflows*chocolatine.yml'
+  pull_request:
+    branches-ignore:
+      -'ga-ignore-*'
+    paths-ignore:
+      -'.github/workflows*chocolatine.yml'
+
+env:
+  MIRROR_URL: ${{ secrets.MIRROR_URL }}
+  EXECUTABLES: ${{ secrets.EXECUTABLES }}
+
+jobs:
+  check_coding_style:
+    name: Check Coding Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Check Coding Style
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            ghcr.io/epitech/coding-style-checker:latest \
+            check.sh $(pwd) $(pwd)
+
+check_program_compilation:
+    name: Check Program Compilation
+    runs-on: epitechcontent/epitest-docker
+    timeout-minutes: 2
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Launch Make
+        run: make
+
+      - name: Clean Up
+        run: make clean
+
+      - name: Verify Executables
+        run: |
+          IFS=',' read -ra EXECUTABLES <<< "$EXECUTABLES"
+          for executable in "${EXECUTABLES[@]}"; do
+            if [ ! -x "$executable" ]; then
+              echo "Executable $executable does not exist or is not executable"
+              exit 1
+            fi
+          done
